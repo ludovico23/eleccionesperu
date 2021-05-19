@@ -1,0 +1,204 @@
+---
+title: "voto_analisis de compentes principales por departamento"
+output: html_notebook
+editor_options: 
+  chunk_output_type: console
+---
+
+# library
+```{r}
+library(tidyverse)
+library(psych)
+
+```
+
+# Get Data (previa trabajada en otra script)
+
+```{r}
+df_inicial = read.csv("E:/Proyectos R/elecciones2021/df_webscraping.csv")
+df_inicial = df_inicial[,3:5]
+
+df_inicial$TOTAL_VOTOS = parse_number(df_inicial$TOTAL_VOTOS, locale = locale(grouping_mark = ","))
+colnames(df_inicial)
+str(df_inicial)
+```
+
+# set direccion
+```{r}
+setwd("E:/Proyectos R/web scraping/ONPE 2021_1")
+getwd()
+```
+
+# limpieza de datos
+
+[19] "TOTAL DE VOTOS VÁLIDOS"                        
+[20] "VOTOS EN BLANCO"                               
+[21] "VOTOS NULOS"                                   
+[22] "TOTAL DE VOTOS EMITIDOS"   
+
+```{r}
+unique(df_inicial$AGRUPACION)
+```
+
+```{r}
+out = c("TOTAL DE VOTOS VÁLIDOS",                        
+"VOTOS EN BLANCO",                               
+"VOTOS NULOS",                                   
+"TOTAL DE VOTOS EMITIDOS")  
+
+lista_agrupaciones = unique(df_inicial$AGRUPACION)
+lista_agrupaciones
+lista_agrupaciones = lista_agrupaciones[1:18]
+
+df_oficial = filter(df_inicial, AGRUPACION %in% lista_agrupaciones)
+```
+
+# Spread data y rownames
+
+```{r}
+df_oficial_s = spread(df_oficial, key = DESC_DEP, value = TOTAL_VOTOS)
+
+# row names
+df_oficial_names = df_oficial_s$AGRUPACION
+df_oficial_row = data.frame(df_oficial_s[,-1], row.names = df_oficial_names)
+```
+
+## solo para departamentos transponer
+
+```{r}
+df_oficial_row = data.frame(t(df_oficial_row))
+```
+
+# ACP 
+
+## ACP: pruebas estadisticas
+
+```{r}
+KMO((df_oficial_row))
+bartlett.test(df_oficial_row)
+
+corPlot(df_oficial_row)
+```
+
+## ACP: ACP
+```{r}
+acp = prcomp(df_oficial_row, scale. = T)
+```
+
+## ACP: determinacion de componentes a usar
+```{r}
+summary(acp)
+round(acp$sdev**2,2)
+scree(df_oficial_row)
+```
+
+
+## ACP: correlaciones con componente
+
+```{r}
+cor_comp = cor(df_oficial_row, acp$x[,1:2])
+cor_comp = data.frame(cor_comp)
+```
+
+
+```{r}
+arrange(cor_comp, cor_comp$PC2)
+classificacion = ifelse(cor_comp$PC2 >= 0, "Izquierda", "Derecha")
+cor_comp_class = data.frame(cor_comp, classificacion)
+```
+
+## ACP: eigen
+```{r}
+acp_eigen = eigen((cor(df_oficial_row)))
+```
+
+## ACP: ranking
+```{r}
+acp_rn1 = acp_eigen$values[1] * acp$x[,1]
+acp_rn2 = acp_eigen$values[2] * acp$x[,2]
+acp_rd1 = acp_eigen$values[1] + acp_eigen$values[2]
+
+ranking = (acp_rn1 + acp_rn2) / acp_rd1
+
+ranking = data.frame(ranking)
+arrange(ranking, desc(ranking))
+write.csv(ranking, file = "ranking.csv")
+
+```
+
+## Voto por departamento
+
+```{r}
+sum_dep = apply(df_oficial_row, 1, FUN = "sum")
+cor_comp_class = data.frame(acp$x[,1:2],  sum_dep)
+
+```
+
+## clasificar los scores entre derecho y malo
+
+```{r}
+classificacion_scores = ifelse(cor_comp_class$PC2 >= 0, "Izquierda", "Derecha")
+
+```
+
+## Fusion con scores y data
+
+```{r}
+df_overall = data.frame(cor_comp_class,classificacion_scores)
+colnames(df_overall)
+```
+
+
+```{r}
+write.csv(df_overall, "acp_dep.csv")
+```
+
+
+```{r}
+df_overall
+write.csv(df_overall, file = "df_overall.csv")
+```
+
+## sum por departamento y ranking
+
+```{r}
+data.frame(ranking, sum_dep)
+```
+
+## graf. por departamentos con PC1 y PC2
+
+
+```{r}
+dev.off()
+
+ggplot(df_overall, aes(x=PC1, y=PC2, color=classificacion_scores, label= rownames(df_overall)))+
+  geom_point()+ geom_vline(xintercept = 0)+ geom_hline(yintercept = 0)+
+  geom_text()+
+  labs(title = "Diagrama de dispersión por departamento según los dos primeros componentes principales", subtitle = "Elaborado: Luis Miguel Meza Ramos")+
+  theme(legend.position="top")
+```
+
+#exp. grafico
+```{r}
+ggsave("voto_acp_135_dep.png", scale = 2)
+```
+
+
+## graf. por departamentos con PC1 y PC2 y vol de votos
+
+```{r}
+ggplot(df_overall, aes(x=PC1, y=PC2, size = sum_dep, color=classificacion_scores, label= rownames(df_overall)))+
+  geom_point(alpha=0.7)+ geom_vline(xintercept = 0)+ geom_hline(yintercept = 0)+
+  geom_text()+
+  labs(title = "Diagrama de dispersión por departamento y volumen de votos según los dos primeros componentes principales", subtitle = "Elaborado: Luis Miguel Meza Ramos")
+  theme(legend.position="top")
+```
+#exp. grafico
+```{r}
+ggsave("voto_acp_145_dep.png", scale = 2)
+```
+
+```{r}
+heatmap(as.matrix(df_oficial_row))
+```
+

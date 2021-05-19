@@ -1,0 +1,175 @@
+---
+title: "elecciones clean y descriptivos"
+output: html_notebook
+editor_options: 
+  chunk_output_type: console
+---
+
+# Get Data (previa trabajada en otra script)
+
+```{r}
+df_inicial = read.csv("E:/Proyectos R/elecciones2021/df_webscraping.csv")
+df_inicial = df_inicial[,3:5]
+
+df_inicial$TOTAL_VOTOS = parse_number(df_inicial$TOTAL_VOTOS, locale = locale(grouping_mark = ","))
+colnames(df_inicial)
+str(df_inicial)
+```
+
+# Fijar directorio
+
+```{r}
+getwd()
+setwd("E:/Proyectos R/web scraping/ONPE 2021_1")
+getwd()
+```
+
+# limpieza de datos
+
+[19] "TOTAL DE VOTOS VÁLIDOS"                        
+[20] "VOTOS EN BLANCO"                               
+[21] "VOTOS NULOS"                                   
+[22] "TOTAL DE VOTOS EMITIDOS"   
+
+```{r}
+unique(df_inicial$AGRUPACION)
+```
+
+```{r}
+out = c("TOTAL DE VOTOS VÁLIDOS",                        
+"VOTOS EN BLANCO",                               
+"VOTOS NULOS",                                   
+"TOTAL DE VOTOS EMITIDOS")  
+
+lista_agrupaciones = unique(df_inicial$AGRUPACION)
+lista_agrupaciones
+lista_agrupaciones = lista_agrupaciones[1:18]
+
+df_oficial = filter(df_inicial, AGRUPACION %in% lista_agrupaciones)
+```
+
+# Spread data y rownames
+
+```{r}
+df_oficial_s = spread(df_oficial, key = DESC_DEP, value = TOTAL_VOTOS)
+
+# row names
+df_oficial_names = df_oficial_s$AGRUPACION
+df_oficial_row = data.frame(df_oficial_s[,-1], row.names = df_oficial_names)
+```
+# totales por deparmentos y partidos
+
+```{r}
+colsum = colSums(df_oficial_row)
+rowsum = rowSums(df_oficial_row)
+
+```
+
+```{r}
+colsum = data.frame(colsum)
+rowsum = data.frame(rowsum)
+```
+
+# Descriptivos por agrupacicones  y departamentos
+
+```{r}
+descriptivo_departamento = describe(df_oficial_row)
+descriptivo_departamento = cbind(colsum, descriptivo_departamento)
+write.csv(descriptivo_departamento, file = "descriptivo_departamento")
+
+descriptivo_partido = describe(t(df_oficial_row))
+descriptivo_partido = cbind(rowsum, descriptivo_partido)
+
+write.csv(descriptivo_partido, file = "descriptivo_partido")
+
+
+```
+
+# Solo keiko y castillo
+"FUERZA POPULAR"
+"PARTIDO POLITICO NACIONAL PERU LIBRE"
+
+```{r}
+unique(df_oficial_s$AGRUPACION)
+df_2vuelta = filter(df_inicial, AGRUPACION %in% c("FUERZA POPULAR", "PARTIDO POLITICO NACIONAL PERU LIBRE") )
+
+colnames(df_2vuelta)
+
+ggplot(df_2vuelta, aes(y = TOTAL_VOTOS, x = AGRUPACION, fill = AGRUPACION))+
+  geom_col()+
+  facet_wrap(~ DESC_DEP, scales = "free")+
+  theme(legend.position="top", axis.text.x = element_blank())+
+  labs(title = "Total de votos por departamento de dos agrupaciones políticas",
+       subtitle = "Elaborado: Luis Miguel Meza Ramos",
+       caption = "Fuente: ONPE")
+```
+
+```{r}
+ggsave("r_108.png", scale = 2)
+```
+
+# box plot segunda vuelta
+
+```{r}
+ggplot(df_2vuelta, aes(y = TOTAL_VOTOS, x = AGRUPACION, fill = AGRUPACION))+
+  geom_boxplot(outlier.colour = "black", outlier.size = 3)+
+  theme(legend.position="top")+
+  labs(title = "Diagrama de Boxplot de ganadores para 2da vuelta",
+       subtitle = "Elaborado: Luis Miguel Meza Ramos",
+       caption = "Fuente: ONPE")
+```
+
+
+```{r}
+ggsave("r_124.png", scale = 2)
+```
+
+Spread de seg vuelta
+```{r}
+#df_2vuelta
+colnames(df_2vuelta)
+cor_df_2vuelta = spread(df_2vuelta, key = AGRUPACION, value = TOTAL_VOTOS)
+
+ggplot(cor_df_2vuelta, aes(x= cor_df_2vuelta$`FUERZA POPULAR`, y= cor_df_2vuelta$`PARTIDO POLITICO NACIONAL PERU LIBRE`))+
+         geom_point()+
+  labs(title = "Diagrama de dispersion de ganadores para 2da vuelta",
+       subtitle = "Elaborado: Luis Miguel Meza Ramos",
+       caption = "Fuente: ONPE")
+```
+
+# drop
+
+```{r}
+cor_df_2vuelta_drop = cor_df_2vuelta[-c(15),]
+
+ggplot(cor_df_2vuelta_drop, aes(x= cor_df_2vuelta_drop$`FUERZA POPULAR`, y= cor_df_2vuelta_drop$`PARTIDO POLITICO NACIONAL PERU LIBRE`))+
+         geom_point()+ geom_smooth(method = "lm")
+  labs(title = "Diagrama de dispersion de ganadores para 2da vuelta",
+       subtitle = "Elaborado: Luis Miguel Meza Ramos",
+       caption = "Fuente: ONPE")
+```
+
+# regresion lineal
+
+```{r}
+lm.dist.speed <- lm(cor_df_2vuelta_drop$`FUERZA POPULAR` ~ cor_df_2vuelta_drop$`PARTIDO POLITICO NACIONAL PERU LIBRE`)
+
+lm.dist.speed$coefficients
+
+plot(cor_df_2vuelta_drop$`FUERZA POPULAR`,cor_df_2vuelta_drop$`PARTIDO POLITICO NACIONAL PERU LIBRE`)
+abline(lm.dist.speed, col = "red")
+
+keiko = -17389.57 * 0.8628655344*lapiz
+
+```
+
+# Librerias
+
+
+
+```{r}
+library(psych)
+library(tidyverse)
+
+```
+

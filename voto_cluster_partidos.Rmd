@@ -1,0 +1,150 @@
+---
+title: "voto_cluster por partidos politicos"
+output: html_notebook
+editor_options: 
+  chunk_output_type: console
+---
+
+# Get Data (previa trabajada en otra script)
+
+```{r}
+df_inicial = read.csv("E:/Proyectos R/elecciones2021/df_webscraping.csv")
+df_inicial = df_inicial[,3:5]
+
+df_inicial$TOTAL_VOTOS = parse_number(df_inicial$TOTAL_VOTOS, locale = locale(grouping_mark = ","))
+colnames(df_inicial)
+str(df_inicial)
+```
+
+# set direccion
+```{r}
+setwd("E:/Proyectos R/web scraping/ONPE 2021_1")
+getwd()
+```
+
+# limpieza de datos
+
+[19] "TOTAL DE VOTOS VÁLIDOS"                        
+[20] "VOTOS EN BLANCO"                               
+[21] "VOTOS NULOS"                                   
+[22] "TOTAL DE VOTOS EMITIDOS"   
+
+```{r}
+unique(df_inicial$AGRUPACION)
+```
+
+```{r}
+out = c("TOTAL DE VOTOS VÁLIDOS",                        
+"VOTOS EN BLANCO",                               
+"VOTOS NULOS",                                   
+"TOTAL DE VOTOS EMITIDOS")  
+
+lista_agrupaciones = unique(df_inicial$AGRUPACION)
+lista_agrupaciones
+lista_agrupaciones = lista_agrupaciones[1:18]
+
+df_oficial = filter(df_inicial, AGRUPACION %in% lista_agrupaciones)
+```
+
+# Spread data y rownames
+
+```{r}
+df_oficial_s = spread(df_oficial, key = DESC_DEP, value = TOTAL_VOTOS)
+
+# row names
+df_oficial_names = df_oficial_s$AGRUPACION
+df_oficial_row = data.frame(df_oficial_s[,-1], row.names = df_oficial_names)
+```
+
+## usar solo si las label son partidos politicos ##
+```{r}
+df_oficial_row = as.data.frame(t(df_oficial_row))
+```
+
+# Cluster
+
+```{r}
+k_means = kmeans(dist(df_oficial_row),3)
+```
+
+# Agregando Cluster a departamentos
+
+```{r}
+df_oficial_row_clus = data.frame(k_means$cluster, df_oficial_row)
+```
+
+
+## ACP: ACP
+```{r}
+acp = prcomp(df_oficial_row, scale. = T)
+
+```
+
+```{r}
+componentes =  as.data.frame(acp$x[,1:2])
+classificacion = ifelse(componentes$PC2 >= 0, "Derecha", "Izquierda")
+df_final = data.frame(componentes, classificacion,df_oficial_row_clus)
+```
+
+```{r}
+colnames(df_final)
+```
+
+
+```{r}
+write.csv(df_final, "cluster_dep.csv")
+```
+
+
+## graf. por departamentos con PC1 y PC2
+
+```{r}
+ggplot(df_final, aes(x=PC1, y=PC2, color = as.factor(k_means.cluster), label = rownames(df_final)))+
+  geom_point()+ geom_vline(xintercept = 0)+ geom_hline(yintercept = 0)+
+  geom_text()+
+  labs(title = "Diagrama de dispersión por agrupación política según los dos primeros componentes principales", subtitle = "Elaborado: Luis Miguel Meza Ramos")+
+  theme(legend.position="top")
+```
+
+#exp. grafico
+```{r}
+ggsave("voto_cluster_139.png", scale = 2)
+```
+
+---------------------------------------------
+## Voto por departamento
+
+```{r}
+sum_dep = apply(df_oficial_row, 1, FUN = "sum")
+df_agg = data.frame(df_final, sum_dep)
+
+```
+## graf. por departamentos con PC1 y PC2 y vol de votos
+
+```{r}
+ggplot(df_agg, aes(x=PC1, y=PC2, color = as.factor(k_means.cluster), label = rownames(df_final), size = sum_dep))+
+  geom_point(alpha =0.5)+ geom_vline(xintercept = 0)+ geom_hline(yintercept = 0)+
+  geom_text()+
+  labs(title = "Diagrama de dispersión por departamentos según los dos primeros componentes principales", subtitle = "Elaborado: Luis Miguel Meza Ramos")+
+  theme(legend.position="top")
+```
+
+#exp. grafico
+```{r}
+ggsave("voto_cluster_139.png", scale = 2)
+```
+
+
+## agr por cluster y vol de votos por departamento
+
+```{r}
+aggregate(df_agg$sum_dep, by = list(df_agg$k_means.cluster), FUN = "mean")
+```
+
+
+## agr por cluster y vol de votos por ideologia 
+```{r}
+aggregate(df_agg$sum_dep, by = list(df_agg$classificacion), FUN = "mean")
+```
+
+--------------
